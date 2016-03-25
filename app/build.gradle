@@ -7,7 +7,7 @@ android {
 
     defaultConfig {
         applicationId "com.example.android.sunshine.app"
-        minSdkVersion 10
+        minSdkVersion 13
         targetSdkVersion 23
 
         versionCode 1
@@ -34,6 +34,8 @@ dependencies {
     compile 'com.android.support:design:23.1.0'
     compile 'com.android.support:recyclerview-v7:23.1.0'
     compile 'com.google.android.apps.muzei:muzei-api:2.0'
-    compile 'com.google.android.gms:play-services-gcm:7.5.0'
+    compile 'com.google.android.gms:play-services-gcm:8.4.0'
+    compile 'com.google.android.gms:play-services-wearable:8.4.0'
+    compile 'com.android.support:support-v13:23.1.1'
     wearApp project(':wear')
 }
