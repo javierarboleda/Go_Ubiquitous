@@ -52,8 +52,20 @@ import java.net.URL;
 import java.util.Vector;
 import java.util.concurrent.ExecutionException;
 
-public class SunshineSyncAdapter extends AbstractThreadedSyncAdapter {
-    public final String LOG_TAG = SunshineSyncAdapter.class.getSimpleName();
+import com.google.android.gms.common.ConnectionResult;
+import com.google.android.gms.common.api.GoogleApiClient;
+import com.google.android.gms.common.api.GoogleApiClient.ConnectionCallbacks;
+import com.google.android.gms.common.api.GoogleApiClient.OnConnectionFailedListener;
+import com.google.android.gms.wearable.DataApi;
+import com.google.android.gms.wearable.DataEventBuffer;
+import com.google.android.gms.wearable.MessageApi;
+import com.google.android.gms.wearable.MessageEvent;
+import com.google.android.gms.wearable.Wearable;
+
+public class SunshineSyncAdapter extends AbstractThreadedSyncAdapter
+        implements ConnectionCallbacks, OnConnectionFailedListener, DataApi.DataListener, MessageApi.MessageListener{
+    public final String TAG = SunshineSyncAdapter.class.getSimpleName();
+    private static final String DATA_SYNC_TAG = "DATA_SYNC";
     public static final String ACTION_DATA_UPDATED =
             "com.example.android.sunshine.app.ACTION_DATA_UPDATED";
     // Interval at which to sync with the weather, in seconds.
@@ -77,6 +89,14 @@ public class SunshineSyncAdapter extends AbstractThreadedSyncAdapter {
     private static final int INDEX_MIN_TEMP = 2;
     private static final int INDEX_SHORT_DESC = 3;
 
+    private GoogleApiClient mGoogleApiClient;
+    long mDateTimeToday;
+    double mHighToday;
+    double mLowToday;
+    String mDescriptionToday;
+    int mWeatherIdToday;
+
+
     @Retention(RetentionPolicy.SOURCE)
     @IntDef({LOCATION_STATUS_OK, LOCATION_STATUS_SERVER_DOWN, LOCATION_STATUS_SERVER_INVALID,  LOCATION_STATUS_UNKNOWN, LOCATION_STATUS_INVALID})
     public @interface LocationStatus {}
@@ -92,8 +112,44 @@ public class SunshineSyncAdapter extends AbstractThreadedSyncAdapter {
     }
 
     @Override
+    public void onConnected(Bundle bundle) {
+        Log.d(DATA_SYNC_TAG, TAG + ": onConnected(): " +
+                "Successfully connected to Google API client");
+
+        Log.d(DATA_SYNC_TAG, TAG + ": onConnected(): GoogleApiClient connected="
+                + mGoogleApiClient.isConnected());
+
+        Wearable.DataApi.addListener(mGoogleApiClient, this);
+        Wearable.MessageApi.addListener(mGoogleApiClient, this);
+
+    }
+
+
+
+    @Override
+    public void onConnectionSuspended(int i) {
+
+    }
+
+    @Override
+    public void onDataChanged(DataEventBuffer dataEventBuffer) {
+
+    }
+
+    @Override
+    public void onMessageReceived(MessageEvent messageEvent) {
+
+    }
+
+    @Override
+    public void onConnectionFailed(ConnectionResult connectionResult) {
+
+    }
+
+    @Override
     public void onPerformSync(Account account, Bundle extras, String authority, ContentProviderClient provider, SyncResult syncResult) {
-        Log.d(LOG_TAG, "Starting sync");
+        Log.d(TAG, "Starting sync");
+
         String locationQuery = Utility.getPreferredLocation(getContext());
 
         // These two need to be declared outside the try/catch
@@ -160,12 +216,12 @@ public class SunshineSyncAdapter extends AbstractThreadedSyncAdapter {
             forecastJsonStr = buffer.toString();
             getWeatherDataFromJson(forecastJsonStr, locationQuery);
         } catch (IOException e) {
-            Log.e(LOG_TAG, "Error ", e);
+            Log.e(TAG, "Error ", e);
             // If the code didn't successfully get the weather data, there's no point in attempting
             // to parse it.
             setLocationStatus(getContext(), LOCATION_STATUS_SERVER_DOWN);
         } catch (JSONException e) {
-            Log.e(LOG_TAG, e.getMessage(), e);
+            Log.e(TAG, e.getMessage(), e);
             e.printStackTrace();
             setLocationStatus(getContext(), LOCATION_STATUS_SERVER_INVALID);
         } finally {
@@ -176,10 +232,19 @@ public class SunshineSyncAdapter extends AbstractThreadedSyncAdapter {
                 try {
                     reader.close();
                 } catch (final IOException e) {
-                    Log.e(LOG_TAG, "Error closing stream", e);
+                    Log.e(TAG, "Error closing stream", e);
                 }
             }
         }
+
+        mGoogleApiClient = new GoogleApiClient.Builder(getContext())
+                .addApi(Wearable.API)
+                .addConnectionCallbacks(this)
+                .addOnConnectionFailedListener(this)
+                .build();
+
+        mGoogleApiClient.connect();
+
         return;
     }
 
@@ -278,6 +343,9 @@ public class SunshineSyncAdapter extends AbstractThreadedSyncAdapter {
             // now we work exclusively in UTC
             dayTime = new Time();
 
+            setTodayWeatherForWatchFace(OWM_TEMPERATURE, OWM_MAX, OWM_MIN, OWM_WEATHER,
+                    OWM_DESCRIPTION, OWM_WEATHER_ID, weatherArray, dayTime, julianStartDay);
+
             for(int i = 0; i < weatherArray.length(); i++) {
                 // These are the values that will be collected.
                 long dateTime;
@@ -348,14 +416,39 @@ public class SunshineSyncAdapter extends AbstractThreadedSyncAdapter {
                 updateMuzei();
                 notifyWeather();
             }
-            Log.d(LOG_TAG, "Sync Complete. " + cVVector.size() + " Inserted");
+            Log.d(TAG, "Sync Complete. " + cVVector.size() + " Inserted");
             setLocationStatus(getContext(), LOCATION_STATUS_OK);
 
         } catch (JSONException e) {
-            Log.e(LOG_TAG, e.getMessage(), e);
+            Log.e(TAG, e.getMessage(), e);
             e.printStackTrace();
             setLocationStatus(getContext(), LOCATION_STATUS_SERVER_INVALID);
         }
+    }
+
+    private void setTodayWeatherForWatchFace(String OWM_TEMPERATURE, String OWM_MAX, String OWM_MIN,
+                    String OWM_WEATHER, String OWM_DESCRIPTION, String OWM_WEATHER_ID,
+                    JSONArray weatherArray, Time dayTime, int julianStartDay)
+                    throws JSONException {
+
+        // Get the JSON object representing the day
+        JSONObject dayForecast = weatherArray.getJSONObject(0);
+
+        // Cheating to convert this to UTC time, which is what we want anyhow
+        mDateTimeToday = dayTime.setJulianDay(julianStartDay);
+
+        // Description is in a child array called "weather", which is 1 element long.
+        // That element also contains a weather code.
+        JSONObject weatherObject =
+                dayForecast.getJSONArray(OWM_WEATHER).getJSONObject(0);
+        mDescriptionToday = weatherObject.getString(OWM_DESCRIPTION);
+        mWeatherIdToday = weatherObject.getInt(OWM_WEATHER_ID);
+
+        // Temperatures are in a child object called "temp".  Try not to name variables
+        // "temp" when working with temperature.  It confuses everybody.
+        JSONObject temperatureObject = dayForecast.getJSONObject(OWM_TEMPERATURE);
+        mHighToday = temperatureObject.getDouble(OWM_MAX);
+        mLowToday = temperatureObject.getDouble(OWM_MIN);
     }
 
     private void updateWidgets() {
@@ -430,7 +523,7 @@ public class SunshineSyncAdapter extends AbstractThreadedSyncAdapter {
                                 .fitCenter()
                                 .into(largeIconWidth, largeIconHeight).get();
                     } catch (InterruptedException | ExecutionException e) {
-                        Log.e(LOG_TAG, "Error retrieving large icon from " + artUrl, e);
+                        Log.e(TAG, "Error retrieving large icon from " + artUrl, e);
                         largeIcon = BitmapFactory.decodeResource(resources, artResourceId);
                     }
                     String title = context.getString(R.string.app_name);
