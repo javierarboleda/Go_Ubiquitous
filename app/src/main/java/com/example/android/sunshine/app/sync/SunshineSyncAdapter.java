@@ -56,16 +56,21 @@ import com.google.android.gms.common.ConnectionResult;
 import com.google.android.gms.common.api.GoogleApiClient;
 import com.google.android.gms.common.api.GoogleApiClient.ConnectionCallbacks;
 import com.google.android.gms.common.api.GoogleApiClient.OnConnectionFailedListener;
+import com.google.android.gms.common.api.ResultCallback;
 import com.google.android.gms.wearable.DataApi;
 import com.google.android.gms.wearable.DataEventBuffer;
 import com.google.android.gms.wearable.MessageApi;
 import com.google.android.gms.wearable.MessageEvent;
+import com.google.android.gms.wearable.PutDataMapRequest;
+import com.google.android.gms.wearable.PutDataRequest;
 import com.google.android.gms.wearable.Wearable;
 
 public class SunshineSyncAdapter extends AbstractThreadedSyncAdapter
         implements ConnectionCallbacks, OnConnectionFailedListener, DataApi.DataListener, MessageApi.MessageListener{
+
     public final String TAG = SunshineSyncAdapter.class.getSimpleName();
     private static final String DATA_SYNC_TAG = "DATA_SYNC";
+
     public static final String ACTION_DATA_UPDATED =
             "com.example.android.sunshine.app.ACTION_DATA_UPDATED";
     // Interval at which to sync with the weather, in seconds.
@@ -90,11 +95,12 @@ public class SunshineSyncAdapter extends AbstractThreadedSyncAdapter
     private static final int INDEX_SHORT_DESC = 3;
 
     private GoogleApiClient mGoogleApiClient;
-    long mDateTimeToday;
-    double mHighToday;
-    double mLowToday;
-    String mDescriptionToday;
-    int mWeatherIdToday;
+    private long mDateTimeToday;
+    private double mHighToday;
+    private double mLowToday;
+    private String mDescriptionToday;
+    private int mWeatherIdToday;
+
 
 
     @Retention(RetentionPolicy.SOURCE)
@@ -121,6 +127,8 @@ public class SunshineSyncAdapter extends AbstractThreadedSyncAdapter
 
         Wearable.DataApi.addListener(mGoogleApiClient, this);
         Wearable.MessageApi.addListener(mGoogleApiClient, this);
+
+        sendTodayForecastToWear();
 
     }
 
@@ -237,6 +245,10 @@ public class SunshineSyncAdapter extends AbstractThreadedSyncAdapter
             }
         }
 
+        return;
+    }
+
+    private void initializeAndConnectWearableApi() {
         mGoogleApiClient = new GoogleApiClient.Builder(getContext())
                 .addApi(Wearable.API)
                 .addConnectionCallbacks(this)
@@ -244,8 +256,6 @@ public class SunshineSyncAdapter extends AbstractThreadedSyncAdapter
                 .build();
 
         mGoogleApiClient.connect();
-
-        return;
     }
 
     /**
@@ -345,6 +355,8 @@ public class SunshineSyncAdapter extends AbstractThreadedSyncAdapter
 
             setTodayWeatherForWatchFace(OWM_TEMPERATURE, OWM_MAX, OWM_MIN, OWM_WEATHER,
                     OWM_DESCRIPTION, OWM_WEATHER_ID, weatherArray, dayTime, julianStartDay);
+
+            initializeAndConnectWearableApi();
 
             for(int i = 0; i < weatherArray.length(); i++) {
                 // These are the values that will be collected.
@@ -449,6 +461,32 @@ public class SunshineSyncAdapter extends AbstractThreadedSyncAdapter
         JSONObject temperatureObject = dayForecast.getJSONObject(OWM_TEMPERATURE);
         mHighToday = temperatureObject.getDouble(OWM_MAX);
         mLowToday = temperatureObject.getDouble(OWM_MIN);
+
+        //mFriendlyDateToday = Utility.getDowMonDayYearDateString(mDateTimeToday);
+
+    }
+
+    private void sendTodayForecastToWear() {
+        Log.d(DATA_SYNC_TAG, TAG + ": sendTodayForecastToWear()");
+
+        String friendlyDateToday = Utility.getDowMonDayYearDateString(mDateTimeToday);
+        int weatherIconId = Utility.getIconResourceForWeatherCondition(mWeatherIdToday);
+
+        PutDataMapRequest putDataMapRequest = PutDataMapRequest.create("/today-forecast");
+
+        putDataMapRequest.getDataMap().putString("date", friendlyDateToday);
+
+        PutDataRequest request = putDataMapRequest.asPutDataRequest();
+        request.setUrgent();
+        Wearable.DataApi.putDataItem(mGoogleApiClient, request)
+                .setResultCallback(new ResultCallback<DataApi.DataItemResult>() {
+                    @Override
+                    public void onResult(DataApi.DataItemResult dataItemResult) {
+                        Log.d(DATA_SYNC_TAG, TAG + ": putDataCallback onResult(): " +
+                                "status=" + dataItemResult.getStatus());
+                    }
+                });
+
     }
 
     private void updateWidgets() {

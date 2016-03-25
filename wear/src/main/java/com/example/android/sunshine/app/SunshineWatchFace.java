@@ -160,6 +160,8 @@ public class SunshineWatchFace extends CanvasWatchFaceService{
 
         }
 
+
+
         @Override
         public void onCreate(SurfaceHolder holder) {
             super.onCreate(holder);
