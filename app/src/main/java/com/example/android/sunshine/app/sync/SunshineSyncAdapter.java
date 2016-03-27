@@ -42,6 +42,7 @@ import org.json.JSONException;
 import org.json.JSONObject;
 
 import java.io.BufferedReader;
+import java.io.ByteArrayOutputStream;
 import java.io.IOException;
 import java.io.InputStream;
 import java.io.InputStreamReader;
@@ -57,6 +58,7 @@ import com.google.android.gms.common.api.GoogleApiClient;
 import com.google.android.gms.common.api.GoogleApiClient.ConnectionCallbacks;
 import com.google.android.gms.common.api.GoogleApiClient.OnConnectionFailedListener;
 import com.google.android.gms.common.api.ResultCallback;
+import com.google.android.gms.wearable.Asset;
 import com.google.android.gms.wearable.DataApi;
 import com.google.android.gms.wearable.DataEventBuffer;
 import com.google.android.gms.wearable.MessageApi;
@@ -466,18 +468,31 @@ public class SunshineSyncAdapter extends AbstractThreadedSyncAdapter
 
     }
 
+    private Asset createWeatherIconAsset(int weatherIconId) {
+        Bitmap iconBitmap = BitmapFactory.decodeResource(getContext().getResources(),
+                weatherIconId);
+        final ByteArrayOutputStream byteStream = new ByteArrayOutputStream();
+        iconBitmap.compress(Bitmap.CompressFormat.PNG, 100, byteStream);
+        return Asset.createFromBytes(byteStream.toByteArray());
+    }
+
     private void sendTodayForecastToWear() {
         Log.d(DATA_SYNC_TAG, TAG + ": sendTodayForecastToWear()");
 
         String friendlyDateToday = Utility.getDowMonDayYearDateString(mDateTimeToday);
         int weatherIconId = Utility.getIconResourceForWeatherCondition(mWeatherIdToday);
+        Asset weatherIconAsset = createWeatherIconAsset(weatherIconId);
 
         PutDataMapRequest putDataMapRequest = PutDataMapRequest.create("/today-forecast");
 
         putDataMapRequest.getDataMap().putString("date", friendlyDateToday);
+        putDataMapRequest.getDataMap().putDouble("hi-temp", mHighToday);
+        putDataMapRequest.getDataMap().putDouble("low-temp", mLowToday);
+        putDataMapRequest.getDataMap().putAsset("weather-icon", weatherIconAsset);
 
         PutDataRequest request = putDataMapRequest.asPutDataRequest();
         request.setUrgent();
+        
         Wearable.DataApi.putDataItem(mGoogleApiClient, request)
                 .setResultCallback(new ResultCallback<DataApi.DataItemResult>() {
                     @Override

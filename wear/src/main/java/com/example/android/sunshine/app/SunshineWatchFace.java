@@ -41,6 +41,7 @@ import com.google.android.gms.common.ConnectionResult;
 import com.google.android.gms.common.api.GoogleApiClient;
 import com.google.android.gms.common.api.GoogleApiClient.ConnectionCallbacks;
 import com.google.android.gms.common.api.GoogleApiClient.OnConnectionFailedListener;
+import com.google.android.gms.wearable.Asset;
 import com.google.android.gms.wearable.DataApi;
 import com.google.android.gms.wearable.DataEventBuffer;
 import com.google.android.gms.wearable.MessageApi;
@@ -132,7 +133,15 @@ public class SunshineWatchFace extends CanvasWatchFaceService{
             @Override
             public void onReceive(Context context, Intent intent) {
                 String date = intent.getStringExtra("date");
+                double highToday = intent.getDoubleExtra("hi-temp", -99);
+                double lowToday = intent.getDoubleExtra("low-temp", -99);
+                Asset weatherIconAsset = intent.getParcelableExtra("weather-icon");
+
                 Log.d(DATA_SYNC_TAG, TAG + ": Received broadcast message: date=" + date);
+                Log.d(DATA_SYNC_TAG, TAG + ": Received broadcast message: hi-temp=" + highToday);
+                Log.d(DATA_SYNC_TAG, TAG + ": Received broadcast message: low-temp=" + lowToday);
+                Log.d(DATA_SYNC_TAG, TAG + ": Received broadcast message: weather-icon="
+                        + weatherIconAsset);
             }
         };
 
