@@ -29,6 +29,7 @@ import android.graphics.Typeface;
 import android.os.Bundle;
 import android.os.Handler;
 import android.os.Message;
+import android.support.v4.content.LocalBroadcastManager;
 import android.support.wearable.watchface.CanvasWatchFaceService;
 import android.support.wearable.watchface.WatchFaceStyle;
 import android.text.format.Time;
@@ -127,6 +128,14 @@ public class SunshineWatchFace extends CanvasWatchFaceService{
          */
         boolean mLowBitAmbient;
 
+        private BroadcastReceiver mMessageReceiver = new BroadcastReceiver() {
+            @Override
+            public void onReceive(Context context, Intent intent) {
+                String date = intent.getStringExtra("date");
+                Log.d(DATA_SYNC_TAG, TAG + ": Received broadcast message: date=" + date);
+            }
+        };
+
 
         @Override
         public void onConnected(Bundle bundle) {
@@ -190,6 +199,10 @@ public class SunshineWatchFace extends CanvasWatchFaceService{
                     .build();
 
             mGoogleApiClient.connect();
+
+            Log.d(DATA_SYNC_TAG, TAG + ": registering receiver 'watch-face-data'");
+            LocalBroadcastManager.getInstance(getApplicationContext())
+                    .registerReceiver(mMessageReceiver, new IntentFilter("watch-face-data"));
 
         }
 
