@@ -136,8 +136,8 @@ public class SunshineWatchFace extends CanvasWatchFaceService{
 
         private GoogleApiClient mGoogleApiClient;
         private String mDateToday;
-        private double mHighToday;
-        private double mLowToday;
+        private String mHighText;
+        private String mLowText;
         private Bitmap mWeatherIcon;
         private boolean forecastPopulated;
 
@@ -152,23 +152,24 @@ public class SunshineWatchFace extends CanvasWatchFaceService{
             @Override
             public void onReceive(Context context, Intent intent) {
                 mDateToday = intent.getStringExtra("date");
-                mHighToday = intent.getDoubleExtra("hi-temp", -99);
-                mLowToday = intent.getDoubleExtra("low-temp", -99);
+                double highToday = intent.getDoubleExtra("hi-temp", -99);
+                double lowToday = intent.getDoubleExtra("low-temp", -99);
                 Asset weatherIconAsset = intent.getParcelableExtra("weather-icon");
 
+                mHighText = Math.round(highToday) + "\u00B0";
+                mLowText = Math.round(lowToday) + "\u00B0";
+
                 if (weatherIconAsset != null) {
+                    forecastPopulated = true;
                     new LoadWeatherIconBitmap().execute(weatherIconAsset);
                 }
 
                 Log.d(DATA_SYNC_TAG, TAG + ": Received broadcast message: date=" + mDateToday);
-                Log.d(DATA_SYNC_TAG, TAG + ": Received broadcast message: hi-temp=" + mHighToday);
-                Log.d(DATA_SYNC_TAG, TAG + ": Received broadcast message: low-temp=" + mLowToday);
+                Log.d(DATA_SYNC_TAG, TAG + ": Received broadcast message: hi-temp=" + highToday);
+                Log.d(DATA_SYNC_TAG, TAG + ": Received broadcast message: low-temp=" + lowToday);
                 Log.d(DATA_SYNC_TAG, TAG + ": Received broadcast message: weather-icon="
                         + mWeatherIcon);
 
-                forecastPopulated = true;
-
-                invalidate();
             }
         };
 
@@ -419,10 +420,8 @@ public class SunshineWatchFace extends CanvasWatchFaceService{
             }
 
             int width = bounds.width();
-            int height = bounds.height();
 
             float centerX = width / 2f;
-            float centerY = height / 2f;
             float y = mYOffset;
 
             // set the hour string
@@ -447,13 +446,8 @@ public class SunshineWatchFace extends CanvasWatchFaceService{
                     y, mMinutePaint);
 
             // if forecast data hasn't been populated, then return
-            // TODO: remove boolean and test data assignments below
-            forecastPopulated = true;
-            mDateToday = "FRI, JUL 14 2015";
-            mHighToday = 25;
-            mLowToday = 16;
-
-            if (!forecastPopulated) {
+            if (!forecastPopulated && mWeatherIcon == null && mDateToday == null
+                    && mHighText == null && mLowText == null) {
                 return;
             }
 
@@ -471,30 +465,14 @@ public class SunshineWatchFace extends CanvasWatchFaceService{
             y += 25;
             canvas.drawLine(centerX - 25, y, centerX + 25, y, mDatePaint);
 
-            // calculate width of icon + high and low temp
-
-            String highText = Math.round(mHighToday) + "\u00B0";
-            String lowText = Math.round(mLowToday) + "\u00B0";
-
             Rect tempTextBounds = new Rect();
-            mHourPaint.getTextBounds(highText, 0, highText.length(), tempTextBounds);
+            mHourPaint.getTextBounds(mHighText, 0, mHighText.length(), tempTextBounds);
 
             int weatherIconSize = tempTextBounds.height() + 15;
-            Log.d(DATA_SYNC_TAG, "mHighPaint textSize = " + weatherIconSize);
-
-            mWeatherIcon = BitmapFactory.decodeResource(getApplicationContext().getResources(),
-                    R.drawable.ic_clear);
-            mWeatherIcon = Bitmap.createScaledBitmap(mWeatherIcon, weatherIconSize, weatherIconSize,
-                    false);
-
-            Log.d(DATA_SYNC_TAG, "high text width = " + mHighPaint.measureText(highText));
-            Log.d(DATA_SYNC_TAG, "low text height = " + mLowPaint.measureText(lowText));
 
             float iconAndTempTextWidth = mWeatherIcon.getWidth() + 10 +
-                    + mHighPaint.measureText(highText) + 6 +
-                    + mLowPaint.measureText(lowText);
-
-            Log.d(DATA_SYNC_TAG, "temp line width = " + iconAndTempTextWidth);
+                    + mHighPaint.measureText(mHighText) + 6 +
+                    + mLowPaint.measureText(mLowText);
 
             // draw icon and high and low temp
 
@@ -504,11 +482,10 @@ public class SunshineWatchFace extends CanvasWatchFaceService{
                     mWeatherIconPaint);
 
             xLeftMargin += weatherIconSize + 10;
-            canvas.drawText(highText, xLeftMargin, y, mHighPaint);
+            canvas.drawText(mHighText, xLeftMargin, y, mHighPaint);
 
-            xLeftMargin += mHighPaint.measureText(highText) + 6;
-            canvas.drawText(lowText, xLeftMargin, y, mLowPaint);
-
+            xLeftMargin += mHighPaint.measureText(mHighText) + 6;
+            canvas.drawText(mLowText, xLeftMargin, y, mLowPaint);
 
         }
 
@@ -549,9 +526,17 @@ public class SunshineWatchFace extends CanvasWatchFaceService{
             protected Void doInBackground(Asset... params) {
 
                 Asset asset = params[0];
-
                 mWeatherIcon = loadBitmapFromAsset(asset);
-                mWeatherIcon = Bitmap.createScaledBitmap(mWeatherIcon, 50, 50, false);
+
+                Rect tempTextBounds = new Rect();
+                mHourPaint.getTextBounds(mHighText, 0, mHighText.length(), tempTextBounds);
+
+                int weatherIconSize = tempTextBounds.height() + 15;
+
+                mWeatherIcon = Bitmap.createScaledBitmap(mWeatherIcon, weatherIconSize,
+                        weatherIconSize, false);
+
+                postInvalidate();
 
                 return null;
             }
